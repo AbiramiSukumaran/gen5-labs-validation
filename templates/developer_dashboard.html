@@ -1,0 +1,170 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Stats Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary shadow-sm">
+            <div class="card-body bg-light">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="display-6 text-primary">{{ stats.total_seasons if stats else 0 }}</h4>
+                        <span class="text-uppercase fw-bold text-muted" style="font-size: 0.8rem;">Seasons participated</span>
+                    </div>
+                    <div class="col-6 border-start">
+                        <h4 class="display-6 text-success">{{ stats.lab_score if stats else 0 }}</h4>
+                        <span class="text-uppercase fw-bold text-muted" style="font-size: 0.8rem;">Lab Score (Approved)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>Developer Submission</h2>
+<hr>
+
+{% if not season %}
+    <div class="alert alert-info">No active season found for today's date.</div>
+{% else %}
+    <form action="{{ url_for('submit_result') }}" method="POST" enctype="multipart/form-data" id="submitForm">
+        <div class="mb-3">
+            <label>Season Number</label>
+            <input type="text" name="season" value="{{ season }}" class="form-control" readonly id="seasonInput">
+        </div>
+        
+        <div class="mb-3">
+            <label>Select Session</label>
+            <select id="sessionSelect" name="session" class="form-select" onchange="updateSession()" required>
+                <option value="">-- Select --</option>
+                {% for s in sessions %}
+                <option value="{{ s.session_number }}" data-desc="{{ s.result_description }}">
+                    Session {{ s.session_number }}: {{ s.session_title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label>Expected Result Description</label>
+            <div id="descDisplay" class="p-3 bg-white border rounded text-muted">Select a session...</div>
+            <input type="hidden" name="description_hidden" id="descHidden">
+        </div>
+
+        <div class="mb-3">
+            <label>Upload Screenshot</label>
+            <input type="file" name="screenshot" class="form-control" required accept="image/*">
+        </div>
+        
+        <!-- Hidden input to store retry count sent to server -->
+        <input type="hidden" name="retry_count_hidden" id="retryCountHidden" value="1">
+
+        <div id="forceSubmitContainer" class="mb-3 form-check p-3 border rounded bg-light border-warning" style="display:none;">
+            <input type="checkbox" class="form-check-input" id="forceSubmit" name="force_submit">
+            <label class="form-check-label text-danger fw-bold" for="forceSubmit">
+                Request Manual Intervention (Force Submit)
+            </label>
+            <div class="form-text">
+                You have attempted this session 5 or more times. If you believe your result is correct, you can force submit it for manual review.
+                <strong>Warning:</strong> This is final. You cannot update it later.
+            </div>
+        </div>
+        
+        <div class="alert alert-secondary py-1 px-2 d-inline-block mb-3">
+            Attempts: <span id="attemptCounter">0</span>
+        </div>
+        <br>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">Submit for Validation</button>
+    </form>
+{% endif %}
+
+<script>
+const USERNAME = "{{ session.username }}";
+const SEASON = "{{ season }}";
+
+function updateSession() {
+    var sel = document.getElementById('sessionSelect');
+    var opt = sel.options[sel.selectedIndex];
+    var desc = opt.getAttribute('data-desc');
+    var sessionVal = sel.value;
+    
+    document.getElementById('descDisplay').innerText = desc || 'Select a session...';
+    document.getElementById('descHidden').value = desc;
+    
+    // Reset Force Submit Checkbox when switching sessions
+    document.getElementById('forceSubmit').checked = false;
+
+    // Update attempts view when session changes
+    if(sessionVal) {
+        checkAttempts(sessionVal);
+    } else {
+        document.getElementById('attemptCounter').innerText = "0";
+        document.getElementById('forceSubmitContainer').style.display = "none";
+        document.getElementById('submitBtn').disabled = false;
+    }
+}
+
+function checkAttempts(sessionNum) {
+    let key = `cv_retry_${USERNAME}_${SEASON}_${sessionNum}`;
+    let count = parseInt(localStorage.getItem(key) || "0");
+    
+    document.getElementById('attemptCounter').innerText = count;
+    document.getElementById('retryCountHidden').value = count + 1; 
+
+    let btn = document.getElementById('submitBtn');
+    let forceCheck = document.getElementById('forceSubmit');
+
+    // Show force submit if attempts >= 5
+    if (count >= 5) {
+        document.getElementById('forceSubmitContainer').style.display = "block";
+        
+        // Disable submit button unless force submit is checked
+        // This enforces the requirement to use force submit after 5 failures
+        btn.disabled = !forceCheck.checked;
+    } else {
+        document.getElementById('forceSubmitContainer').style.display = "none";
+        btn.disabled = false;
+    }
+}
+
+// Toggle button state when Force Submit checkbox changes
+document.getElementById('forceSubmit').addEventListener('change', function() {
+    let btn = document.getElementById('submitBtn');
+    let container = document.getElementById('forceSubmitContainer');
+    
+    // Only apply restricted logic if we are in the "max retries" state
+    if (container.style.display !== "none") {
+        btn.disabled = !this.checked;
+    }
+});
+
+// Increment counter on submit
+document.getElementById('submitForm').addEventListener('submit', function() {
+    var sel = document.getElementById('sessionSelect');
+    var sessionNum = sel.value;
+    
+    if(sessionNum) {
+        let key = `cv_retry_${USERNAME}_${SEASON}_${sessionNum}`;
+        let count = parseInt(localStorage.getItem(key) || "0");
+        localStorage.setItem(key, count + 1);
+    }
+});
+</script>
+{% endblock %}

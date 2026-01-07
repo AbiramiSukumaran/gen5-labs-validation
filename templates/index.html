@@ -1,0 +1,563 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Vipassana | Vertex AI Validator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs (Firestore only, Auth is handled via Backend) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: 'Google Sans', sans-serif; background-color: #F8F9FA; }
+        .google-blue { color: #4285F4; }
+        .bg-google-blue { background-color: #4285F4; }
+        .google-red { color: #DB4437; }
+        .google-green { color: #0F9D58; }
+        .google-yellow { color: #F4B400; }
+    </style>
+
+    <script>
+        // --- FIREBASE CONFIGURATION ---
+        // REPLACE WITH YOUR ACTUAL CONFIG FROM CONSOLE
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            authDomain: "project-id.firebaseapp.com",
+            projectId: "project-id",
+            storageBucket: "project-id.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+
+        // Environment Injection
+        if (typeof __firebase_config !== 'undefined') {
+            try {
+                Object.assign(firebaseConfig, JSON.parse(__firebase_config));
+            } catch (e) { console.error(e); }
+        }
+        
+        const rawAppId = (typeof __app_id !== 'undefined') ? __app_id : 'default-app-id';
+        const APP_ID = rawAppId.replace(/\//g, '_');
+
+        // Initialize
+        if (typeof firebase !== 'undefined') {
+            firebase.initializeApp(firebaseConfig);
+            window.db = firebase.firestore();
+        }
+
+        // Helper for Firestore Paths
+        const getColl = (name) => `artifacts/${APP_ID}/public/data/${name}`;
+    </script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-google-blue p-2 rounded-lg shadow-sm">
+                        <i data-lucide="cpu" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800 tracking-tight">Code Vipassana</h1>
+                        <p class="text-xs text-gray-500 font-medium">Vertex AI Validation Engine</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div id="user-info" class="hidden flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-full">
+                        <span id="username-display" class="text-sm font-bold text-google-blue"></span>
+                        <span id="role-badge" class="text-xs px-2 py-0.5 rounded bg-white text-gray-600 border border-gray-200 font-mono"></span>
+                    </div>
+                    <button id="logout-btn" onclick="app.logout()" class="hidden text-gray-500 hover:text-google-red transition-colors">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        
+        <!-- View: Login -->
+        <section id="view-login" class="max-w-md mx-auto mt-10">
+            <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800">Sign In</h2>
+                    <p class="text-gray-500 mt-2">Enter your provisioned credentials</p>
+                </div>
+                <form onsubmit="app.login(event)" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input type="text" id="username" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input type="password" id="password" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                    </div>
+                    <button type="submit" id="login-submit-btn" class="w-full bg-google-blue hover:bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md transition-all flex justify-center items-center gap-2">
+                        <span>Continue</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </form>
+                <div id="login-error" class="mt-4 text-center text-sm text-google-red hidden font-medium"></div>
+            </div>
+        </section>
+
+        <!-- View: Owner Dashboard -->
+        <section id="view-owner" class="hidden space-y-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Active Developers</h3>
+                    <p class="text-3xl font-bold text-gray-800 mt-2" id="stat-devs">--</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Total Submissions</h3>
+                    <p class="text-3xl font-bold text-gray-800 mt-2" id="stat-subs">--</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-sm font-medium uppercase">Pass Rate</h3>
+                    <p class="text-3xl font-bold text-google-green mt-2" id="stat-rate">--%</p>
+                </div>
+            </div>
+
+            <!-- Management Tabs -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="border-b border-gray-200 flex">
+                    <button onclick="app.setOwnerTab('leaderboard')" id="tab-leaderboard" class="flex-1 py-4 text-center font-medium text-google-blue border-b-2 border-google-blue bg-blue-50">Leaderboard</button>
+                    <button onclick="app.setOwnerTab('sessions')" id="tab-sessions" class="flex-1 py-4 text-center font-medium text-gray-500 hover:text-gray-700">Session Config</button>
+                    <button onclick="app.setOwnerTab('users')" id="tab-users" class="flex-1 py-4 text-center font-medium text-gray-500 hover:text-gray-700">User Gen</button>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Tab: Leaderboard -->
+                    <div id="content-leaderboard">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 text-gray-500 uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 rounded-l-lg">Rank</th>
+                                    <th class="px-4 py-3">User</th>
+                                    <th class="px-4 py-3">Score</th>
+                                    <th class="px-4 py-3 rounded-r-lg">Last Active</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-body" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Tab: Sessions -->
+                    <div id="content-sessions" class="hidden space-y-6">
+                        <form onsubmit="app.createSession(event)" class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                            <h4 class="font-bold text-lg mb-4">Add New Session</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input type="text" id="new-sess-id" placeholder="Session ID (e.g. S1-L1)" class="p-3 border rounded-lg" required>
+                                <input type="text" id="new-sess-title" placeholder="Title" class="p-3 border rounded-lg" required>
+                                <input type="text" id="new-sess-link" placeholder="Codelab URL" class="p-3 border rounded-lg md:col-span-2" required>
+                                <textarea id="new-sess-desc" placeholder="Validation Criteria (What should Gemini look for?)" class="p-3 border rounded-lg md:col-span-2 h-24" required></textarea>
+                            </div>
+                            <button type="submit" class="mt-4 bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-black transition-colors">Create Session</button>
+                        </form>
+                        <div id="session-list" class="space-y-3"></div>
+                    </div>
+
+                    <!-- Tab: Users -->
+                    <div id="content-users" class="hidden">
+                        <div class="flex items-end gap-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium mb-1">Number of Users</label>
+                                <input type="number" id="gen-count" value="10" class="w-full p-3 border rounded-lg">
+                            </div>
+                            <button onclick="app.generateUsers()" class="bg-google-blue text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-600">Generate Batch</button>
+                        </div>
+                        <div id="generated-users-area" class="mt-6 hidden">
+                            <h4 class="font-bold mb-2">New Credentials</h4>
+                            <textarea id="csv-output" readonly class="w-full h-48 font-mono text-xs p-4 bg-gray-900 text-green-400 rounded-lg"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Developer Dashboard -->
+        <section id="view-developer" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <h3 class="font-bold text-gray-800 mb-1">Your Progress</h3>
+                    <p class="text-xs text-gray-500 mb-4">Season 1: Vertex AI</p>
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div id="dev-progress-bar" class="h-full bg-google-green transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                        <span id="dev-progress-text" class="text-sm font-bold text-gray-700">0/0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session List -->
+            <div class="lg:col-span-2 space-y-6">
+                <h2 class="text-xl font-bold text-gray-800">Active Labs</h2>
+                <div id="dev-session-list" class="space-y-4"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Application Logic -->
+    <script>
+        const app = {
+            user: null, // { username, role }
+            data: { sessions: [], submissions: {} },
+
+            init: function() {
+                lucide.createIcons();
+            },
+
+            // --- Auth ---
+            login: async function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('login-submit-btn');
+                const err = document.getElementById('login-error');
+                
+                const u = document.getElementById('username').value;
+                const p = document.getElementById('password').value;
+
+                btn.disabled = true;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>`;
+                lucide.createIcons();
+                err.classList.add('hidden');
+
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username: u, password: p})
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        this.user = { username: data.username, role: data.role };
+                        this.renderUI();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                } catch (error) {
+                    err.innerText = error.message;
+                    err.classList.remove('hidden');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = `<span>Continue</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+                    lucide.createIcons();
+                }
+            },
+
+            logout: function() {
+                this.user = null;
+                document.getElementById('view-login').classList.remove('hidden');
+                document.getElementById('view-owner').classList.add('hidden');
+                document.getElementById('view-developer').classList.add('hidden');
+                document.getElementById('logout-btn').classList.add('hidden');
+                document.getElementById('user-info').classList.add('hidden');
+            },
+
+            // --- Routing/State ---
+            renderUI: function() {
+                // Header
+                document.getElementById('view-login').classList.add('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                document.getElementById('user-info').classList.remove('hidden');
+                document.getElementById('username-display').innerText = this.user.username;
+                document.getElementById('role-badge').innerText = this.user.role;
+
+                if (this.user.role === 'OWNER') {
+                    document.getElementById('view-owner').classList.remove('hidden');
+                    this.loadOwnerData();
+                } else {
+                    document.getElementById('view-developer').classList.remove('hidden');
+                    this.loadDeveloperData();
+                }
+            },
+
+            // --- Owner Logic ---
+            setOwnerTab: function(tab) {
+                ['leaderboard', 'sessions', 'users'].forEach(t => {
+                    document.getElementById(`content-${t}`).classList.add('hidden');
+                    const btn = document.getElementById(`tab-${t}`);
+                    btn.classList.remove('text-google-blue', 'border-b-2', 'border-google-blue', 'bg-blue-50');
+                    btn.classList.add('text-gray-500');
+                });
+                
+                document.getElementById(`content-${tab}`).classList.remove('hidden');
+                const activeBtn = document.getElementById(`tab-${tab}`);
+                activeBtn.classList.add('text-google-blue', 'border-b-2', 'border-google-blue', 'bg-blue-50');
+                activeBtn.classList.remove('text-gray-500');
+            },
+
+            loadOwnerData: function() {
+                // Real-time listener for sessions
+                window.db.collection(getColl('sessions')).onSnapshot(snap => {
+                    const list = document.getElementById('session-list');
+                    list.innerHTML = '';
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        list.innerHTML += `
+                            <div class="p-4 bg-white border border-gray-200 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold text-gray-800">${d.title}</span>
+                                    <p class="text-xs text-gray-500 truncate max-w-md">${d.validationDescription}</p>
+                                </div>
+                                <span class="text-xs bg-gray-100 px-2 py-1 rounded">${d.sessionId}</span>
+                            </div>
+                        `;
+                    });
+                });
+
+                // Leaderboard calculation
+                window.db.collection(getColl('submissions')).where('status', '==', 'APPROVED').onSnapshot(snap => {
+                    const scores = {};
+                    snap.forEach(doc => {
+                        const d = doc.data();
+                        scores[d.developerCredential] = (scores[d.developerCredential] || 0) + 1;
+                    });
+                    
+                    const sorted = Object.entries(scores).sort((a,b) => b[1] - a[1]);
+                    const tbody = document.getElementById('leaderboard-body');
+                    tbody.innerHTML = '';
+                    
+                    sorted.forEach(([user, score], index) => {
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 font-medium text-gray-500">#${index+1}</td>
+                                <td class="px-4 py-3 font-mono text-blue-600">${user}</td>
+                                <td class="px-4 py-3 font-bold">${score}</td>
+                                <td class="px-4 py-3 text-xs text-gray-400">Just now</td>
+                            </tr>
+                        `;
+                    });
+
+                    // Stats
+                    document.getElementById('stat-subs').innerText = snap.size; // Total approved
+                });
+            },
+
+            createSession: async function(e) {
+                e.preventDefault();
+                const data = {
+                    sessionId: document.getElementById('new-sess-id').value,
+                    title: document.getElementById('new-sess-title').value,
+                    codelabLink: document.getElementById('new-sess-link').value,
+                    validationDescription: document.getElementById('new-sess-desc').value,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await window.db.collection(getColl('sessions')).add(data);
+                e.target.reset();
+            },
+
+            generateUsers: async function() {
+                const count = document.getElementById('gen-count').value;
+                const res = await fetch('/api/generate_credentials', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({count: count, seasonId: 'S1'})
+                });
+                const data = await res.json();
+                
+                const area = document.getElementById('generated-users-area');
+                const txt = document.getElementById('csv-output');
+                area.classList.remove('hidden');
+                
+                let csv = "Username,Password\n";
+                data.users.forEach(u => csv += `${u.username},${u.password}\n`);
+                txt.value = csv;
+            },
+
+            // --- Developer Logic ---
+            loadDeveloperData: function() {
+                // 1. Get Sessions
+                window.db.collection(getColl('sessions')).orderBy('sessionId').onSnapshot(snap => {
+                    this.data.sessions = [];
+                    snap.forEach(doc => this.data.sessions.push({id: doc.id, ...doc.data()}));
+                    this.renderDevList();
+                });
+
+                // 2. Get My Submissions
+                window.db.collection(getColl('submissions'))
+                    .where('developerCredential', '==', this.user.username)
+                    .onSnapshot(snap => {
+                        this.data.submissions = {};
+                        snap.forEach(doc => {
+                            const d = doc.data();
+                            this.data.submissions[d.sessionId] = d;
+                        });
+                        this.renderDevList();
+                        this.updateProgress();
+                    });
+            },
+
+            renderDevList: function() {
+                const container = document.getElementById('dev-session-list');
+                container.innerHTML = '';
+                
+                this.data.sessions.forEach(sess => {
+                    const sub = this.data.submissions[sess.id];
+                    const status = sub ? sub.status : 'PENDING';
+                    const retries = sub ? (sub.retryCount || 0) : 0;
+                    const isLocked = retries >= 5 && status !== 'APPROVED';
+
+                    let statusUI = '';
+                    if (status === 'APPROVED') {
+                        statusUI = `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> Passed</span>`;
+                    } else if (status === 'REJECTED') {
+                        statusUI = `<span class="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-200 flex items-center gap-1"><i data-lucide="x-circle" class="w-3 h-3"></i> Failed</span>`;
+                    } else {
+                        statusUI = `<span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">Pending</span>`;
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = "bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all";
+                    
+                    let actionArea = '';
+                    if (status === 'APPROVED') {
+                        actionArea = `<div class="mt-4 p-3 bg-green-50 rounded-lg text-sm text-green-800 border border-green-100">
+                            <strong>Great job!</strong> Lab completed successfully.
+                        </div>`;
+                    } else if (isLocked) {
+                        actionArea = `<div class="mt-4 p-3 bg-red-50 rounded-lg text-sm text-red-800 border border-red-100 flex items-center gap-2">
+                            <i data-lucide="lock" class="w-4 h-4"></i> Max retries reached. Contact Season Owner.
+                        </div>`;
+                    } else {
+                        actionArea = `
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                ${sub && sub.aiComment ? `<div class="mb-3 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-100"><strong>AI Feedback:</strong> ${sub.aiComment}</div>` : ''}
+                                <div class="flex gap-3">
+                                    <input type="file" id="file-${sess.id}" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                    <button onclick="app.uploadProof('${sess.id}')" class="bg-gray-900 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-black transition-colors whitespace-nowrap">
+                                        Verify
+                                    </button>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-400">Retries used: ${retries}/5</div>
+                            </div>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs font-bold text-google-blue uppercase tracking-wider">${sess.sessionId}</span>
+                                    <a href="${sess.codelabLink}" target="_blank" class="text-gray-400 hover:text-gray-600"><i data-lucide="external-link" class="w-3 h-3"></i></a>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800">${sess.title}</h3>
+                            </div>
+                            ${statusUI}
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2 bg-gray-50 p-3 rounded border border-gray-100">
+                            <span class="font-bold text-gray-700 block mb-1">Criteria:</span>
+                            ${sess.validationDescription}
+                        </p>
+                        ${actionArea}
+                    `;
+                    container.appendChild(card);
+                });
+                lucide.createIcons();
+            },
+
+            uploadProof: async function(sessionId) {
+                const fileInput = document.getElementById(`file-${sessionId}`);
+                if (!fileInput.files[0]) return alert("Please select a screenshot first.");
+                
+                const btn = fileInput.nextElementSibling;
+                const originalText = btn.innerText;
+                btn.innerText = "Checking...";
+                btn.disabled = true;
+
+                // 1. Get Session Data for Validation Prompt
+                const session = this.data.sessions.find(s => s.id === sessionId);
+                
+                // 2. Prepare Form Data
+                const formData = new FormData();
+                formData.append('image', fileInput.files[0]);
+                formData.append('description', session.validationDescription);
+
+                try {
+                    // 3. Send to Python Backend
+                    const res = await fetch('/api/validate', { method: 'POST', body: formData });
+                    const result = await res.json();
+
+                    // 4. Update Firestore
+                    // Important: We update Firestore from Client for simplicity in this demo,
+                    // but in strict prod, the backend should do the write to ensure no tampering.
+                    // Here we trust the result from our own backend.
+                    const subRef = window.db.collection(getColl('submissions'));
+                    const existing = this.data.submissions[sessionId];
+                    
+                    const payload = {
+                        sessionId: sessionId,
+                        developerCredential: this.user.username,
+                        status: result.passed ? 'APPROVED' : 'REJECTED',
+                        aiComment: result.comment,
+                        retryCount: existing ? (existing.retryCount + 1) : 1,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    if (existing) {
+                        await subRef.doc(existing.id).update(payload);
+                    } else {
+                        // Store the doc ID same as session ID or random? Firestore auto-id is safer for querying
+                        await subRef.add(payload); // We rely on query filtering
+                    }
+
+                } catch (e) {
+                    console.error(e);
+                    alert("Validation failed. See console.");
+                } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            },
+
+            updateProgress: function() {
+                const total = this.data.sessions.length;
+                if (total === 0) return;
+                
+                const passed = Object.values(this.data.submissions).filter(s => s.status === 'APPROVED').length;
+                const pct = Math.round((passed / total) * 100);
+                
+                document.getElementById('dev-progress-bar').style.width = `${pct}%`;
+                document.getElementById('dev-progress-text').innerText = `${passed}/${total}`;
+            }
+        };
+
+        // Start
+        app.init();
+    </script>
+</body>
+</html>

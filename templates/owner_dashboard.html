@@ -1,0 +1,76 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<h2>Owner Dashboard</h2>
+<hr>
+
+<div class="row">
+    <!-- Feature 1: Season Mgmt -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">Add Session</div>
+            <div class="card-body">
+                <form action="{{ url_for('add_session') }}" method="POST" enctype="multipart/form-data">
+                    <div class="row">
+                        <div class="col-6"><label>Season #</label><input type="number" name="season_number" class="form-control" required></div>
+                        <div class="col-6"><label>Session #</label><input type="number" name="session_number" class="form-control" required></div>
+                    </div>
+                    <div class="mt-2"><label>Title</label><input type="text" name="session_title" class="form-control" required></div>
+                    <div class="row mt-2">
+                        <div class="col-4"><label>Start</label><input type="date" name="start_date" class="form-control" required></div>
+                        <div class="col-4"><label>End</label><input type="date" name="end_date" class="form-control" required></div>
+                        <div class="col-4"><label>Sub. End</label><input type="date" name="sub_end_date" class="form-control" required></div>
+                    </div>
+                    <div class="mt-2"><label>Codelab Link</label><input type="text" name="link" class="form-control"></div>
+                    <div class="mt-2"><label>Step #</label><input type="number" name="step" class="form-control"></div>
+                    <div class="mt-2"><label>Result Description</label><textarea name="description" class="form-control" rows="2" required></textarea></div>
+                    <div class="mt-2"><label>Sample Screenshot</label><input type="file" name="sample_screenshot" class="form-control"></div>
+                    <button class="btn btn-success mt-3 w-100">Add Session</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature 2 & 3 -->
+    <div class="col-md-6">
+        <!-- Credentials -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning">Generate Credentials</div>
+            <div class="card-body">
+                <form action="{{ url_for('generate_creds') }}" method="POST">
+                    <label class="form-label">Number of Credentials to Generate</label>
+                    <input type="number" name="count" class="form-control mb-2" required min="1" max="50000">
+                    <div class="form-text text-muted mb-3">
+                        <strong>Note:</strong> Always enter a higher limit number than expected developers to ensure enough credentials are available. Max limit is 50,000 per batch.
+                    </div>
+                    <button class="btn btn-dark">Generate & Download CSV</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="card">
+            <div class="card-header bg-info">Leaderboard</div>
+            <div class="card-body">
+                <p>View validation summary and rankings.</p>
+                <a href="{{ url_for('leaderboard') }}" class="btn btn-primary">View Leaderboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
